@@ -93,6 +93,9 @@ func (s tunnelServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Log originating ip and port
+
+	log.Logf("%v proxied as %v", r.RemoteAddr, wgconn.LocalAddr().String())
 	// tunnel the traffic using the buffered connection
 	err = tunnel(r.Context(), wgconn, brw, nil)
 	if err == nil {
