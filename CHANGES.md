@@ -1,3 +1,8 @@
+# 2.1.0 (2026-08-25)
+- Server: Conditionally log the originating IP (default disabled)
+- Go: Update to 1.26
+- CI: Use Codeberg runner
+
 # 2.0.1 (2025-08-14)
 - Client: Disable HTTP/2
 - Contrib: fix vpn_setup.sh script for 2.x ProxyGuard client

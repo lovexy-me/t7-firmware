@@ -13,7 +13,7 @@ traffic. This keeps the codebase simple.
 
 # Dependencies
 
-- Go (target: >= 1.19)
+- Go (target: >= 1.26)
 
 # Building
 
