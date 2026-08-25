@@ -86,6 +86,8 @@ This example starts a HTTP server on TCP port 51821 and forwards UDP packets to 
 proxyguard-server --listen 0.0.0.0:51821 --to 127.0.0.1:51820
 ```
 
+> **_NOTE:_**  The server also has a `-logip` option to log the originating IP and port for requests that are forwarded
+
 # Deployment
 For details on deployment, [see here](./deploy.md).
 
