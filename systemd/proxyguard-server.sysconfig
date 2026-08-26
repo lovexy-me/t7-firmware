@@ -7,3 +7,6 @@
 # OPTIONAL, DEFAULT = 127.0.0.1:51820
 #TO=127.0.0.1:51820
 #TO=[::1]:51820
+
+# Pass other arguments to the daemon
+#OTHER_ARGS=-logip
