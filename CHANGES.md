@@ -1,3 +1,6 @@
+# 2.1.1 (2026-08-26)
+- Systemd Server: Allow specifying other args through environment file
+
 # 2.1.0 (2026-08-25)
 - Server: Conditionally log the originating IP (default disabled)
 - Go: Update to 1.26
