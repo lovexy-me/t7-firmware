@@ -45,7 +45,7 @@ jobs:
       - name: Sizes
         if: always()
         run: |
-          cd src/bin/targets/*/* 2>/dev/null && ls -la && cat *.manifest | sort > manifest.txt || true
+          cd src && ls -la bin/targets/*/*/ ; find build_dir/target-*/root-* -type f -size +1M -exec ls -la {} + | sort -k5 -n -r | head -25 || true
       - name: Collect
         if: always()
         run: |
