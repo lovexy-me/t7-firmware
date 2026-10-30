@@ -28,8 +28,8 @@ jobs:
         run: bash diy.sh
       - name: Config
         run: |
-          cd src && cp ../seed.config .config && make defconfig
-          miss=0
+          miss=0; cd src && grep -vE 'TARGET_DEVICE|MULTI_PROFILE|TARGET_mediatek_mt7981_DEVICE|PER_DEVICE_ROOTFS' defconfig/mt7981-ax3000.config > .config && cat ../seed.config >> .config && make defconfig
+          for k in CONFIG_PACKAGE_kmod-mt_wifi CONFIG_PACKAGE_kmod-warp CONFIG_PACKAGE_kmod-conninfra CONFIG_PACKAGE_luci-app-mtk CONFIG_PACKAGE_kmod-mediatek_hnat; do grep -q "^$k=y" .config || { echo "MISSING $k"; miss=1; }; done
           for k in $(grep '=y' ../seed.config | cut -d= -f1); do grep -q "^$k=y" .config || { echo "MISSING $k"; miss=1; }; done
           for k in $(grep '=n' ../seed.config | cut -d= -f1); do if grep -q "^$k=y" .config; then echo "STILL_ON $k"; fi; done
           echo "== diag =="
