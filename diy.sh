@@ -2,8 +2,8 @@
 set -e
 cd src
 cat >> feeds.conf.default <<'F'
-src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages.git;main
-src-git passwall https://github.com/xiaorouji/openwrt-passwall.git;main
+src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
+src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
 F
 ./scripts/feeds update -a
 # newer Go for sing-box / xray / cloudflared
