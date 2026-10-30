@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     paths: [seed.config, .github/workflows/build.yml, diy.sh]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -27,9 +29,15 @@ jobs:
       - name: Config
         run: |
           cd src && cp ../seed.config .config && make defconfig
-          echo "== missing from final config =="
-          grep '=y' ../seed.config | cut -d= -f1 | while read k; do grep -q "^$k=y" .config || echo "MISSING $k"; done
-          grep '=n' ../seed.config | cut -d= -f1 | while read k; do grep -q "^$k=y" .config && echo "STILL_ON $k"; done; true
+          miss=0
+          for k in $(grep '=y' ../seed.config | cut -d= -f1); do grep -q "^$k=y" .config || { echo "MISSING $k"; miss=1; }; done
+          for k in $(grep '=n' ../seed.config | cut -d= -f1); do if grep -q "^$k=y" .config; then echo "STILL_ON $k"; fi; done
+          echo "== diag =="
+          grep -nE "passwall|sing-box|SING_BOX|PACKAGE_xray|golang|netlink-diag|inet-diag|iptables-mod-socket|zz-legacy" .config || true
+          grep -n -B2 -A25 "^config PACKAGE_sing-box$" tmp/.config-package.in | head -60 || true
+          grep -n -A14 "luci-app-passwall_Iptables_Transparent_Proxy$" tmp/.config-package.in | head -30 || true
+          cp .config ../final.config
+          exit $miss
       - name: Download
         run: cd src && make download -j8 || make download -j1 V=s
       - name: Build
@@ -38,13 +46,17 @@ jobs:
         if: always()
         run: |
           cd src/bin/targets/*/* 2>/dev/null && ls -la && cat *.manifest | sort > manifest.txt || true
-      - uses: actions/upload-artifact@v4
+      - name: Collect
         if: always()
+        run: |
+          mkdir -p out
+          cp final.config out/ 2>/dev/null || true
+          cp src/bin/targets/*/*/*sysupgrade* src/bin/targets/*/*/*.manifest src/bin/targets/*/*/sha256sums src/bin/targets/*/*/config.buildinfo out/ 2>/dev/null || true
+          ls -la out
+      - name: Release
+        if: always()
+        uses: softprops/action-gh-release@v2
         with:
-          name: t7-firmware
-          path: |
-            src/bin/targets/*/*/*sysupgrade*
-            src/bin/targets/*/*/*.manifest
-            src/bin/targets/*/*/sha256sums
-            src/bin/targets/*/*/config.buildinfo
-            src/.config
+          tag_name: build-${{ github.run_id }}
+          name: T7 build ${{ github.run_id }}
+          files: out/*
