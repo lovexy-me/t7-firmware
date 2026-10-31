@@ -2,6 +2,8 @@ name: sidecar-lxc
 on:
   push:
     branches: [sidecar-lxc]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -37,3 +39,9 @@ jobs:
           path: |
             sidecar-lxc-rootfs.tar.gz
             sidecar-lxc.manifest
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          T=sidecar-lxc-${{ github.run_id }}
+          gh release create $T sidecar-lxc-rootfs.tar.gz sidecar-lxc.manifest -R ${{ github.repository }} --target ${{ github.sha }} --prerelease -t "$T" -n "ImmortalWrt 24.10.6 LXC rootfs for side router"
