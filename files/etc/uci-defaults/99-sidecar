@@ -1,0 +1,10 @@
+#!/bin/sh
+uci -q batch <<E
+set system.@system[0].hostname='OpenWrt-LXC'
+set system.@system[0].zonename='Asia/Shanghai'
+set system.@system[0].timezone='CST-8'
+set luci.main.mediaurlbase='/luci-static/argon'
+commit system
+commit luci
+E
+exit 0

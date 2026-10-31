@@ -1,0 +1,39 @@
+name: sidecar-lxc
+on:
+  push:
+    branches: [sidecar-lxc]
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: ImageBuilder
+        run: |
+          V=24.10.6
+          sudo apt-get update -qq && sudo apt-get install -y -qq zstd
+          wget -q https://downloads.immortalwrt.org/releases/$V/targets/x86/64/immortalwrt-imagebuilder-$V-x86-64.Linux-x86_64.tar.zst
+          tar --zstd -xf immortalwrt-imagebuilder-$V-x86-64.Linux-x86_64.tar.zst
+          mv immortalwrt-imagebuilder-$V-x86-64.Linux-x86_64 ib
+          cd ib
+          sed -i -e 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' \
+                 -e 's/^CONFIG_TARGET_ROOTFS_SQUASHFS=y/# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/' \
+                 -e 's/^CONFIG_ISO_IMAGES=y/# CONFIG_ISO_IMAGES is not set/' \
+                 -e 's/^CONFIG_VMDK_IMAGES=y/# CONFIG_VMDK_IMAGES is not set/' \
+                 -e 's/^CONFIG_VDI_IMAGES=y/# CONFIG_VDI_IMAGES is not set/' \
+                 -e 's/^CONFIG_VHDX_IMAGES=y/# CONFIG_VHDX_IMAGES is not set/' \
+                 -e 's/^CONFIG_QCOW2_IMAGES=y/# CONFIG_QCOW2_IMAGES is not set/' \
+                 -e 's/^CONFIG_GRUB_IMAGES=y/# CONFIG_GRUB_IMAGES is not set/' \
+                 -e 's/^CONFIG_GRUB_EFI_IMAGES=y/# CONFIG_GRUB_EFI_IMAGES is not set/' .config
+          grep -q '^CONFIG_TARGET_ROOTFS_TARGZ=y' .config || echo 'CONFIG_TARGET_ROOTFS_TARGZ=y' >> .config
+          make image PROFILE=generic PACKAGES="$(tr '\n' ' ' < ../packages.txt) -ppp -ppp-mod-pppoe -luci-proto-ppp" FILES=../files
+          ls -la bin/targets/x86/64/
+          cp bin/targets/x86/64/*rootfs.tar.gz ../sidecar-lxc-rootfs.tar.gz
+          cp bin/targets/x86/64/*.manifest ../sidecar-lxc.manifest
+          sha256sum ../sidecar-lxc-rootfs.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-lxc
+          path: |
+            sidecar-lxc-rootfs.tar.gz
+            sidecar-lxc.manifest
