@@ -80,6 +80,10 @@ func (c *Client) Setup(ctx context.Context) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+	// hark: enlarge UDP receive buffer (capped by net.core.rmem_max) to avoid RcvbufErrors when the TCP side stalls
+	if rbErr := conn.SetReadBuffer(4 << 20); rbErr != nil {
+		log.Logf("failed setting UDP read buffer: %v", rbErr)
+	}
 	err = c.setupDNS(ctx)
 	if err != nil {
 		clErr := conn.Close()
