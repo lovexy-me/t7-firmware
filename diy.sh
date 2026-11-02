@@ -36,12 +36,18 @@ LI=package/lucky-src/lucky/files/lucky.init
 sed -i -e 's|^CONFDIR=.*|CONFDIR=/etc/config/lucky.daji|' -e '/-setconf -key/d' -e '/-rCancelSafeURL/d' $LI
 sed -i -e '/^    if \[ -z "\$SafeURL" \] ; then$/,/^    fi$/d' $LI
 sed -i "s|option configdir '/etc/lucky'|option configdir '/etc/config/lucky.daji'|" package/lucky-src/lucky/files/lucky.config
+# lucky 2.27 admin is HTTPS-only (self-signed): LuCI iframe must use https, plus a new-tab button to accept the cert
+sed -i "s|option ssl '0'|option ssl '1'|" package/lucky-src/lucky/files/lucky.config
+LJ=package/lucky-src/luci-app-lucky/htdocs/luci-static/resources/view/lucky/lucky.js
+sed -i "s#container.appendChild(iframe);#container.appendChild(E('p',{'id':'lucky-newtab','style':'margin:.5em 0'},[E('a',{'href':buttonUrl,'target':'_blank','class':'btn cbi-button'},_('Open Lucky in new tab'))]));container.appendChild(iframe);#" $LJ
+grep -q lucky-newtab $LJ || { echo "lucky.js patch failed"; exit 1; }
 mkdir -p files/etc/uci-defaults
 cat > files/etc/uci-defaults/97-lucky-migrate <<'U'
 #!/bin/sh
 # gdy666 layout (anonymous section) -> sirpdboy layout (named section lucky.lucky)
 # LuCI app hardcodes /etc/lucky; point it at the kept config dir
 [ -d /etc/config/lucky.daji ] && [ ! -e /etc/lucky ] && ln -s /etc/config/lucky.daji /etc/lucky
+uci -q get lucky.lucky >/dev/null && [ -z "$(uci -q get lucky.lucky.ssl)" ] && { uci set lucky.lucky.ssl=1; uci commit lucky; }
 uci -q get lucky.lucky >/dev/null && exit 0
 en=$(uci -q get lucky.@lucky[0].enabled)
 while uci -q delete lucky.@lucky[0]; do :; done
@@ -50,6 +56,7 @@ uci set lucky.lucky.enabled="${en:-1}"
 uci set lucky.lucky.logger=1
 uci set lucky.lucky.port=16601
 uci set lucky.lucky.configdir=/etc/config/lucky.daji
+uci set lucky.lucky.ssl=1
 uci commit lucky
 exit 0
 U
