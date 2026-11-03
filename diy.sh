@@ -36,11 +36,12 @@ LI=package/lucky-src/lucky/files/lucky.init
 sed -i -e 's|^CONFDIR=.*|CONFDIR=/etc/config/lucky.daji|' -e '/-setconf -key/d' -e '/-rCancelSafeURL/d' $LI
 sed -i -e '/^    if \[ -z "\$SafeURL" \] ; then$/,/^    fi$/d' $LI
 sed -i "s|option configdir '/etc/lucky'|option configdir '/etc/config/lucky.daji'|" package/lucky-src/lucky/files/lucky.config
-# lucky 2.27 admin is HTTPS-only (self-signed): LuCI iframe must use https, plus a new-tab button to accept the cert
+# lucky 2.27 admin is HTTPS-only (self-signed); ssl=1 so "Base Setting" opens the web UI over https
 sed -i "s|option ssl '0'|option ssl '1'|" package/lucky-src/lucky/files/lucky.config
-LJ=package/lucky-src/luci-app-lucky/htdocs/luci-static/resources/view/lucky/lucky.js
-sed -i "s#container.appendChild(iframe);#container.appendChild(E('p',{'id':'lucky-newtab','style':'margin:.5em 0'},[E('a',{'href':buttonUrl,'target':'_blank','class':'btn cbi-button'},_('Open Lucky in new tab'))]));container.appendChild(iframe);#" $LJ
-grep -q lucky-newtab $LJ || { echo "lucky.js patch failed"; exit 1; }
+# drop the "Control panel" iframe menu (blank under self-signed https; Base Setting already opens the web UI)
+LM=$(find package/lucky-src/luci-app-lucky -name 'luci-app-lucky.json' | head -1)
+python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d.pop("admin/services/lucky/lucky",None);json.dump(d,open(p,"w"),indent=1)' "$LM"
+grep -q '"admin/services/lucky/lucky"' "$LM" && { echo "lucky menu patch failed"; exit 1; }
 mkdir -p files/etc/uci-defaults
 cat > files/etc/uci-defaults/97-lucky-migrate <<'U'
 #!/bin/sh
