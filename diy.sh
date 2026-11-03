@@ -41,7 +41,7 @@ sed -i "s|option ssl '0'|option ssl '1'|" package/lucky-src/lucky/files/lucky.co
 # drop the "Control panel" iframe menu (blank under self-signed https; Base Setting already opens the web UI)
 LM=$(find package/lucky-src/luci-app-lucky -name 'luci-app-lucky.json' | head -1)
 python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d.pop("admin/services/lucky/lucky",None);json.dump(d,open(p,"w"),indent=1)' "$LM"
-grep -q '"admin/services/lucky/lucky"' "$LM" && { echo "lucky menu patch failed"; exit 1; }
+if grep -q '"admin/services/lucky/lucky"' "$LM"; then echo "lucky menu patch failed"; exit 1; fi
 mkdir -p files/etc/uci-defaults
 cat > files/etc/uci-defaults/97-lucky-migrate <<'U'
 #!/bin/sh
