@@ -1,14 +1,17 @@
 #!/bin/bash
 set -e
+. "$(dirname "$0")/pins.env"
 cd src
-cat >> feeds.conf.default <<'F'
-src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
-src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
+# shallow clone of one pinned commit: pin_clone <url> <sha> <dir>
+pin_clone(){ git init -q "$3"; git -C "$3" remote add origin "$1"; git -C "$3" fetch -q --depth 1 origin "$2"; git -C "$3" checkout -q FETCH_HEAD; }
+cat >> feeds.conf.default <<F
+src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git^${PW_PKGS_SHA}
+src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git^${PW_LUCI_SHA}
 F
 ./scripts/feeds update -a
 # newer Go for sing-box / xray / cloudflared
 rm -rf feeds/packages/lang/golang
-git clone --depth 1 -b 27.x https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+pin_clone https://github.com/sbwml/packages_lang_golang $GOLANG_SHA feeds/packages/lang/golang
 # prefer passwall_packages versions over feeds/packages duplicates
 for p in $(ls feeds/passwall_packages); do rm -rf feeds/packages/net/$p feeds/packages/utils/$p; done
 rm -rf feeds/luci/applications/luci-app-passwall*
@@ -16,6 +19,7 @@ rm -rf feeds/luci/applications/luci-app-passwall*
 rm -rf feeds/packages/net/cloudflared
 git clone --depth 1 --filter=blob:none --sparse https://github.com/openwrt/packages /tmp/owp
 git -C /tmp/owp sparse-checkout set net/cloudflared net/zerotier
+git -C /tmp/owp checkout -q $OWPKGS_SHA
 cp -r /tmp/owp/net/cloudflared feeds/packages/net/
 # cloudflared: bump to latest release
 sed -i -e 's/^PKG_VERSION:=.*/PKG_VERSION:=2026.10.7/' -e 's/^PKG_RELEASE:=.*/PKG_RELEASE:=1/' \
@@ -28,7 +32,7 @@ grep -q 'ZT_NONFREE' $ZT/Makefile || sed -i 's/ZT_SSO_SUPPORTED=0 \\/ZT_SSO_SUPP
 rm -rf $ZT/patches && cp -r /tmp/owp/net/zerotier/patches $ZT/
 grep -E '^PKG_(VERSION|HASH)|ZT_' $ZT/Makefile
 # EasyTier
-git clone --depth 1 https://github.com/EasyTier/luci-app-easytier package/easytier-src
+pin_clone https://github.com/EasyTier/luci-app-easytier $EASYTIER_SHA package/easytier-src
 # lucky 2.27.2 + luci (sirpdboy, binary arm64 fetched at build time)
 git clone --depth 1 -b v2.27.2 https://github.com/sirpdboy/luci-app-lucky package/lucky-src
 LI=package/lucky-src/lucky/files/lucky.init
@@ -64,10 +68,18 @@ U
 # shellgate (kept via sysupgrade.conf, not an opkg package) must autostart after every flash
 cat > files/etc/uci-defaults/98-hark-shellgate <<'U'
 #!/bin/sh
-[ -x /etc/init.d/shellgate ] || exit 0
-/etc/init.d/shellgate enable
-# rc.d is already enumerated on this first boot, so start it once later
-( sleep 60; pgrep -f /usr/bin/shellgate >/dev/null || /etc/init.d/shellgate start ) </dev/null >/dev/null 2>&1 &
+# shellgate and proxyguard-server are kept via sysupgrade.conf (not opkg packages): enable them after every flash
+for s in shellgate proxyguard-server; do
+  [ -x /etc/init.d/$s ] && /etc/init.d/$s enable
+done
+# rc.d is already enumerated on this first boot, so start them once later
+( sleep 60
+  pgrep -f /usr/bin/shellgate >/dev/null || /etc/init.d/shellgate start
+  netstat -lnt | grep -q ":8444 " || /etc/init.d/proxyguard-server start ) </dev/null >/dev/null 2>&1 &
+# firewall defaults: reject anything no zone accepts (zones keep their own policies)
+uci -q set firewall.@defaults[0].input=REJECT
+uci -q set firewall.@defaults[0].forward=REJECT
+uci -q commit firewall
 exit 0
 U
 ./scripts/feeds update -i
