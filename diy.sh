@@ -61,6 +61,15 @@ uci set lucky.lucky.ssl=1
 uci commit lucky
 exit 0
 U
+# shellgate (kept via sysupgrade.conf, not an opkg package) must autostart after every flash
+cat > files/etc/uci-defaults/98-hark-shellgate <<'U'
+#!/bin/sh
+[ -x /etc/init.d/shellgate ] || exit 0
+/etc/init.d/shellgate enable
+# rc.d is already enumerated on this first boot, so start it once later
+( sleep 60; pgrep -f /usr/bin/shellgate >/dev/null || /etc/init.d/shellgate start ) </dev/null >/dev/null 2>&1 &
+exit 0
+U
 ./scripts/feeds update -i
 ./scripts/feeds install -a -p passwall_packages -f
 ./scripts/feeds install -a -p passwall -f
