@@ -4,9 +4,12 @@ set -e
 cd src
 # shallow clone of one pinned commit: pin_clone <url> <sha> <dir>
 pin_clone(){ git init -q "$3"; git -C "$3" remote add origin "$1"; git -C "$3" fetch -q --depth 1 origin "$2"; git -C "$3" checkout -q FETCH_HEAD; }
+# fetch the pinned commits by SHA (upstream force-pushes; a src-git ^sha clone of the branch can lose them)
+pin_clone https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git $PW_PKGS_SHA /tmp/pw_packages
+pin_clone https://github.com/Openwrt-Passwall/openwrt-passwall.git $PW_LUCI_SHA /tmp/pw_luci
 cat >> feeds.conf.default <<F
-src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git^${PW_PKGS_SHA}
-src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git^${PW_LUCI_SHA}
+src-link passwall_packages /tmp/pw_packages
+src-link passwall /tmp/pw_luci
 F
 ./scripts/feeds update -a
 # newer Go for sing-box / xray / cloudflared
