@@ -28,4 +28,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           T=proxyguard-hark-${{ github.run_id }}
-          gh release create $T out/*.xz out/SHA256SUMS -R ${{ github.repository }} --target ${{ github.sha }} --prerelease -t "$T" -n "ProxyGuard 2.1.1 + UDP SO_RCVBUF 4MB (client). Upstream: codeberg.org/eduVPN/proxyguard"
+          gh release create $T out/*.xz out/SHA256SUMS -R ${{ github.repository }} --target ${{ github.sha }} --prerelease -t "$T" -n "ProxyGuard 2.1.1-hark.2: UDP SO_RCVBUF 4MB (client+server), server tunnel open/close log. Upstream: codeberg.org/eduVPN/proxyguard"

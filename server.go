@@ -9,8 +9,12 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// hark: per-tunnel ids for the open/close log lines
+var tunnelSeq atomic.Uint64
 
 type tunnelServer struct {
 	wgaddr *net.UDPAddr
@@ -70,6 +74,20 @@ func (s tunnelServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Logf("failed closing hijacked connection: %v", clErr)
 		}
 	}()
+	// hark: the server's Read/WriteTimeout deadlines must not apply to the long-lived tunnel
+	_ = conn.SetDeadline(time.Time{})
+	// hark: log every tunnel open/close (no addresses unless -logip)
+	id := tunnelSeq.Add(1)
+	start := time.Now()
+	from := "-"
+	if s.logip {
+		from = r.RemoteAddr
+	}
+	log.Logf("tunnel #%d open (from %s)", id, from)
+	reason := "closed"
+	defer func() {
+		log.Logf("tunnel #%d closed after %s: %s", id, time.Since(start).Round(time.Second), reason)
+	}()
 
 	// stolen from nhooyr.io/websocket
 	// https://github.com/golang/go/issues/32314
@@ -85,7 +103,15 @@ func (s tunnelServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wgconn, err := net.DialUDP("udp", nil, s.wgaddr)
 	if err != nil {
 		log.Logf("Failed dialing WireGuard: %v", err)
+		reason = "wireguard dial failed"
 		return
+	}
+	// hark: bigger UDP buffers (capped by net.core.rmem_max/wmem_max) so WG bursts are queued, not dropped
+	if rbErr := wgconn.SetReadBuffer(4 << 20); rbErr != nil {
+		log.Logf("failed setting UDP read buffer: %v", rbErr)
+	}
+	if wbErr := wgconn.SetWriteBuffer(4 << 20); wbErr != nil {
+		log.Logf("failed setting UDP write buffer: %v", wbErr)
 	}
 	defer func() {
 		clErr := wgconn.Close()
@@ -104,11 +130,14 @@ func (s tunnelServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, io.EOF) {
+		reason = "client closed (EOF)"
 		return
 	}
 	if errors.Is(err, ErrReaderTimeout) {
+		reason = "no data from client for 60s (reader timeout)"
 		return
 	}
+	reason = "error: " + err.Error()
 	log.Logf("Tunneling UDP<->TCP client exited with error: %v", err)
 }
 

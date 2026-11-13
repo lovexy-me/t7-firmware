@@ -6,7 +6,7 @@ import (
 )
 
 // version is the current version
-const version = "2.1.1"
+const version = "2.1.1-hark.2"
 
 // versionReleased sets whether or not the current version is released yet
 const versionReleased = true
