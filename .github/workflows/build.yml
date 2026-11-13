@@ -29,6 +29,27 @@ jobs:
           git log -1 --format='%h %cd'
       - name: Feeds
         run: bash diy.sh
+      - name: Hark binaries (shellgate + proxyguard-server into ROM)
+        run: |
+          . ./pins.env
+          set -e
+          D=src/files/usr/libexec/hark; mkdir -p $D
+          # shellgate: pinned commit, edition-openwrt, static musl
+          git init -q sg && git -C sg remote add origin https://github.com/lovexy-me/shellgate-mcp.git
+          git -C sg fetch -q --depth 1 origin "$SHELLGATE_SHA" && git -C sg checkout -q FETCH_HEAD
+          grep -q "^version = \"$SHELLGATE_VER\"" sg/core/Cargo.toml || { echo "shellgate version mismatch"; grep ^version sg/core/Cargo.toml; exit 1; }
+          rustup toolchain install stable --profile minimal -t aarch64-unknown-linux-musl
+          pip install -q ziglang cargo-zigbuild
+          (cd sg/core && cargo +stable zigbuild --locked --release --no-default-features --features edition-openwrt --target aarch64-unknown-linux-musl)
+          install -m 755 sg/core/target/aarch64-unknown-linux-musl/release/shellgate $D/shellgate
+          # proxyguard-server hark build: download + verify
+          curl -fsSL --retry 3 -o pgs.xz "https://github.com/${{ github.repository }}/releases/download/$PG_HARK_TAG/proxyguard-server-linux-arm64.xz"
+          echo "$PG_HARK_XZ_SHA256  pgs.xz" | sha256sum -c -
+          xz -dc pgs.xz > $D/proxyguard-server
+          echo "$PG_HARK_SHA256  $D/proxyguard-server" | sha256sum -c -
+          chmod 755 $D/proxyguard-server
+          file $D/*; sha256sum $D/* | tee hark-bins.sha256
+          ls -la src/files/usr/bin src/files/etc/init.d src/files/etc/uci-defaults
       - name: Config
         run: |
           miss=0; cd src && grep -vE 'TARGET_DEVICE|MULTI_PROFILE|TARGET_mediatek_mt7981_DEVICE|PER_DEVICE_ROOTFS' defconfig/mt7981-ax3000.config > .config && cat ../seed.config >> .config && make defconfig
@@ -45,6 +66,30 @@ jobs:
         run: cd src && make download -j8 || make download -j1 V=s
       - name: Build
         run: cd src && (make -j$(nproc) || make -j1 V=s)
+      - name: Verify keep-list
+        run: |
+          set -e
+          cd src; M=$(ls bin/targets/*/*/*.manifest); R=$(ls -d build_dir/target-*/root-* | grep -v root-orig | head -1)
+          miss=0
+          for p in kmod-mt_wifi kmod-warp luci-app-mtk luci-app-passwall xray-core sing-box chinadns-ng dnsmasq-full \
+                   haproxy lucky luci-app-lucky zerotier luci-app-zerotier easytier luci-app-easytier udp2raw \
+                   kmod-wireguard wireguard-tools luci-proto-wireguard cloudflared fail2ban vlmcsd luci-app-vlmcsd \
+                   https-dns-proxy ndppd miniupnpd luci-app-upnp ttyd luci-app-ttyd python3 kmod-tun dropbear \
+                   ddns-scripts-cloudflare curl tcpdump iperf3 bash; do
+            grep -q "^$p - " $M && echo "OK  $(grep "^$p - " $M)" || { echo "MISSING package $p"; miss=$((miss+1)); }
+          done
+          grep -q '^CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7661=y' .config && echo "OK  mt_wifi 7.6.6.1" || { echo "MISSING mt_wifi 7661"; miss=$((miss+1)); }
+          grep -q "^xray-core - 26.11.9" $M || { echo "WRONG xray version"; miss=$((miss+1)); }
+          . ../pins.env
+          grep -q "^cloudflared - $CLOUDFLARED_VER" $M || { echo "WRONG cloudflared version"; miss=$((miss+1)); }
+          for f in usr/libexec/hark/shellgate usr/libexec/hark/proxyguard-server usr/bin/shellgate usr/bin/proxyguard-server \
+                   etc/init.d/shellgate etc/init.d/proxyguard-server etc/uci-defaults/95-hark-ttyd \
+                   etc/uci-defaults/96-hark-haproxy-timeout etc/uci-defaults/97-lucky-migrate etc/uci-defaults/98-hark-shellgate; do
+            [ -e "$R/$f" ] && echo "OK  /$f" || { echo "MISSING file /$f"; miss=$((miss+1)); }
+          done
+          echo "$PG_HARK_SHA256  $R/usr/libexec/hark/proxyguard-server" | sha256sum -c -
+          echo "missing=$miss" | tee ../keep-check.txt
+          [ $miss -eq 0 ]
       - name: Sizes
         if: always()
         run: |
@@ -54,6 +99,7 @@ jobs:
         run: |
           mkdir -p out
           cp final.config out/ 2>/dev/null || true
+          cp keep-check.txt hark-bins.sha256 out/ 2>/dev/null || true
           cp src/bin/targets/*/*/*sysupgrade* src/bin/targets/*/*/*.manifest src/bin/targets/*/*/sha256sums src/bin/targets/*/*/config.buildinfo out/ 2>/dev/null || true
           ls -la out
       - name: Release
